@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 # TODO
-# get_machine automatically checks if machines.json exists and prefers it
-# get_machine lets you know if machines.json is outdated with a warning
 # print_machine function actually prints human readable
 # -r machine: gets machine, prints raw json output instead of human readable
 # -s: show status of the account, if a machine is spawned
@@ -66,14 +64,33 @@ def get(url):
 # three groups of machines, can't request all at once
 # to minimize number of requests, check active machines first, then retired, then starting point
 def get_machine(name_ip_id):
-    print('Searching for ' + name_ip_id)
+    print('searching for ' + name_ip_id)
+    machines_json_path = os.path.join(SCRIPT_DIR, 'machines.json')
+    if os.path.exists(machines_json_path):
+        print('machines.json found, reading from it')
+        with open(machines_json_path, 'r') as f:
+            data = json.load(f)
+        if int(time.time()) - data['time_created'] > 300000:
+            print('warning: machines.json is a few days old')
+            print('consider updating it with -g')
+
+        for group in urls.values():
+            machine_list = data[group]
+            machine = machine_from_list(name_ip_id, machine_list)
+            if machine:
+                print_machine(machine, group)
+                return
+        print('error: no such machine')
+        return
+
+    print('no machines.json found, calling API for machine data...')
     for url in urls:
         machine_list = get(url)['info']
         machine = machine_from_list(name_ip_id, machine_list)
         if machine:
             print_machine(machine, urls[url])
             return
-    print('Error: no such machine')
+    print('error: no such machine')
 
 # select machine from list where name_ip_id is equal to a machine's name OR ip OR id
 def machine_from_list(name_ip_id, machine_list):
@@ -82,6 +99,10 @@ def machine_from_list(name_ip_id, machine_list):
 
 # function for -g
 # generates a json with all machine data and saves it to machines.json in script's directory
+# machines.json structure:
+# 'active': {data about all active machines}
+# 'retired': {data about all retired machines}
+# 'starting_point': {data about all starting point machines}
 def generate_json():
     print('making API requests for machine data...')
     data = {}
