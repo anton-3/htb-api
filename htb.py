@@ -6,6 +6,10 @@
 # -s: show status of the account, if a machine is spawned
 # -S machine: spawn a specific machine
 # -K: kill the running machine
+# -R: reset the running machine
+#    post('https://www.hackthebox.com/api/v4/vm/reset', {'machine_id':444})
+# -u user: user info, if no user is provided assume self
+# colored output?
 
 import requests
 from argparse import ArgumentParser
@@ -16,7 +20,7 @@ import json
 import time
 from datetime import datetime
 
-ENABLE_DEBUGGING = False
+ENABLE_DEBUGGING = True
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -54,6 +58,14 @@ difficulty = [
 
 # functions (bc im too lazy to implement a class)
 
+# listing all functions right here for sanity's sake
+# get(): send GET request to the API, return json
+# post(): send POST request to the API, return json
+# get_machine(): get data about a machine and print it to console
+# get_reviews(): return review data about a machine
+# print_json(): print a python dict prettily to console
+# print_machine(): print a machine's data prettily to console
+
 # sends a request to an endpoint in HTB's API, passing proper headers for auth
 # return json response as python dict
 def get(url):
@@ -61,8 +73,20 @@ def get(url):
         print('no API token found in .env, you need one to make API requests')
         print('instructions here: https://github.com/anton-3/htb-api')
         sys.exit(1)
-    resp = requests.get(url, headers=HEADERS).content.decode('utf-8')
-    return json.loads(resp)
+    response = requests.get(url, headers=HEADERS).content.decode('utf-8')
+    return json.loads(response)
+
+def post(url, data=None):
+    if not TOKEN:
+        print('no API token found in .env, you need one to make API requests')
+        print('instructions here: https://github.com/anton-3/htb-api')
+        sys.exit(1)
+    if data:
+        response = requests.post(url, headers=HEADERS, data=data)
+    else:
+        response = requests.post(url, headers=HEADERS)
+    response = response.content.decode('utf-8')
+    return json.loads(response)
 
 # function for -m
 # get data about a machine and print it to console
