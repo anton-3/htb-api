@@ -1,9 +1,9 @@
-# HackTheBox API Script 1.0
+# HackTheBox API Script 2.0
 
-Simple python script to interact with [HackTheBox](https://www.hackthebox.com)'s API
+Simple python script to interact with [HackTheBox](https://www.hackthebox.com)'s [API](https://documenter.getpostman.com/view/13129365/TVeqbmeq)
 
 ```
-usage: htb.py [-h] [-m machine | -r machine | -g]
+usage: htb.py [-h] [-m machine | -r machine]
 
 simple commands to call the HackTheBox v4 API
 
@@ -11,7 +11,6 @@ options:
   -h, --help  show this help message and exit
   -m machine  print info about a machine - pass its name, ip, or id
   -r machine  same as -m but print as raw json
-  -g          generate a json with machine data - this makes requests way faster
 ```
 
 ## Usage
@@ -35,21 +34,20 @@ You need an API token in order to use this script. In order to get one, head ove
 
 ```
 $ ./htb.py -m lame
-machines.json found, reading from it
 
-      Lame - Easy Linux - by ch4p - 10.10.10.3
+      Lame - Easy Linux - Retired - by ch4p
       Released March 14, 2017 (1970 days ago)
       User Difficulty Rating 26/100
-      41983 User Owns, 44731 Root Owns
+      42000 User Owns, 44747 Root Owns
 
-      Rating - 4.5/5 Stars - 136 Reviews
+      Rating - 4.5/5 Stars - 137 Reviews
          #############################################-----
 
       Difficulty Ratings:
-      1  ################################################## 23723
-      2  ##################################---------------- 16338
-      3  ########################-------------------------- 11418
-      4  #######------------------------------------------- 3566
+      1  ################################################## 23729
+      2  ##################################---------------- 16342
+      3  ########################-------------------------- 11426
+      4  #######------------------------------------------- 3567
       5  ###########################----------------------- 12941
       6  #------------------------------------------------- 648
       7  -------------------------------------------------- 379
@@ -62,7 +60,6 @@ machines.json found, reading from it
 
 - Retrieving details about any active, retired, or starting point HackTheBox machine
 - Print that data to the console in a human readable format
-- Generate a json file of machine data to speed up lookup times
 
 ## Upcoming Features
 
