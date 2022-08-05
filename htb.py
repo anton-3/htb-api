@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 # TODO
-# print_machine function actually prints human readable
 # implement submitting flags (post to /machine/own with flag:flag, id: machine id, difficulty
 # couldn't find any documentation for submitting flags so here's an example
 # https://github.com/clubby789/htb-api/blob/1993431b2b458f8163127971c2b046cb0895cb40/hackthebox/machine.py#L97
@@ -17,8 +16,10 @@ import sys
 import json
 import time
 from datetime import datetime
-# for debugging
-from IPython import embed
+
+ENABLE_DEBUGGING = True
+if ENABLE_DEBUGGING:
+    from IPython import embed
 
 # get API token from .env
 load_dotenv()
@@ -38,7 +39,8 @@ group = parser.add_mutually_exclusive_group()
 group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name, ip, or id')
 group.add_argument('-g', action='store_true', help='generate a json with all machine data - this makes requests way faster')
 group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
-group.add_argument('-d', action='store_true', help='debug mode')
+if ENABLE_DEBUGGING:
+    group.add_argument('-d', action='store_true', help='debug mode')
 
 args = parser.parse_args()
 
@@ -218,7 +220,7 @@ def main():
         get_machine(args.m if args.m else args.r)
     elif args.g:
         generate_json()
-    elif args.d:
+    elif ENABLE_DEBUGGING and args.d:
         embed()
     else:
         parser.print_help()
