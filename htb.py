@@ -7,6 +7,8 @@
 # -s: show status of the account, if a machine is spawned
 # -S machine: spawn a specific machine
 # -K: kill the running machine
+# interactive display of machines sorted by difficulty filtering out previously done ones
+# colored output?
 
 import requests
 from argparse import ArgumentParser
