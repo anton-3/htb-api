@@ -17,7 +17,7 @@ import json
 import time
 from datetime import datetime
 
-ENABLE_DEBUGGING = True
+ENABLE_DEBUGGING = False
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -37,8 +37,8 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 parser = ArgumentParser(description='simple commands to call the HackTheBox v4 API')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name, ip, or id')
-group.add_argument('-g', action='store_true', help='generate a json with all machine data - this makes requests way faster')
 group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
+group.add_argument('-g', action='store_true', help='generate a json with machine data - this makes requests way faster')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -85,7 +85,6 @@ def get(url):
 # three groups of machines, can't request all at once
 # to minimize number of requests, check active machines first, then retired, then starting point
 def get_machine(name_ip_id):
-#    print('searching for ' + name_ip_id)
     machines_json_path = os.path.join(SCRIPT_DIR, 'machines.json')
     if os.path.exists(machines_json_path):
         print('machines.json found, reading from it')
@@ -132,6 +131,7 @@ def get_reviews(id):
 # 'active': {data about all active machines}
 # 'retired': {data about all retired machines}
 # 'starting_point': {data about all starting point machines}
+# 'time_created': (unix time when the json was generated)
 def generate_json():
     print('making API requests for machine data...')
     data = {}
@@ -150,7 +150,7 @@ def generate_json():
 
 # print json data (python dict) to the console prettily
 def print_json(data):
-    print(json.dumps(data, indent=4))#, sort_keys=True))
+    print(json.dumps(data, indent=4))
 
 # take json data about a machine and print it in a human readable way
 # group is 'active', 'retired', or 'starting_point'
@@ -161,6 +161,7 @@ def print_machine(machine, group):
         print_json(machine)
         return
     # otherwise it's -m, so print it human readable
+
     # do starting point first bc it's different
     if group == 'starting_point':
         m_name = machine['name']
