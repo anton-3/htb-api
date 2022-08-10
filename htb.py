@@ -3,11 +3,10 @@
 # TODO
 # implement submitting flags (post to /machine/own with flag:flag, id: machine id, difficulty
 # https://github.com/D3vil0per/HackTheBox-API
-# -s: show status of the account, if a machine is spawned
 # -S machine: spawn a specific machine
 # -K: kill the running machine
 # -R: reset the running machine
-#    post('https://www.hackthebox.com/api/v4/vm/reset', {'machine_id':444})
+#    post('/vm/reset', {'machine_id':444})
 # -u user: user info, if no user is provided assume self
 # colored output?
 
@@ -18,9 +17,9 @@ import os
 import sys
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
-ENABLE_DEBUGGING = True
+ENABLE_DEBUGGING = False
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -38,6 +37,7 @@ parser = ArgumentParser(description='simple commands to call the HackTheBox v4 A
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name, ip, or id')
 group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
+group.add_argument('-a', action='store_true', help='print info about currently active machine')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -62,7 +62,8 @@ difficulty = [
 # listing all functions right here for sanity's sake
 # get(): send GET request to the API, return json
 # post(): send POST request to the API, return json
-# get_machine(): get data about a machine and print it to console
+# get_machine(): -m and -r, get data about a machine and print it to console
+# get_active(): -a, basically get_machine() but for currently active machine
 # get_reviews(): return review data about a machine
 # print_json(): print a python dict prettily to console
 # print_machine(): print a machine's data prettily to console
@@ -93,7 +94,7 @@ def post(endpoint, data=None):
     return json.loads(response)
 
 # function for -m
-# /machine/profile/name_or_id
+# /machine/profile/name_or_id OR /sp/machines/name_or_id
 # get data about a machine and print it to console
 # name_or_id is either the name or id of the machine
 # we can get the data directly if it's a lab machine (active or retired)
@@ -112,6 +113,25 @@ def get_machine(name_or_id):
         print_machine(machine, 'starting_point')
     else:
         print('error: no such machine')
+
+# function for -a
+# /machine/active
+# gets currently active machine and prints its information
+def get_active():
+    response = get('/machine/active')['info']
+    if not response:
+        print('No currently active machine')
+        return
+    name = response['name']
+    machine_id = response['id']
+    expire_date = response['expires_at']
+    expire_date_obj = datetime.strptime(expire_date, '%Y-%m-%d %H:%M:%S')
+    now = datetime.now()
+    expires_in = expire_date_obj - now
+    expires_in_rounded = timedelta(days=expires_in.days, seconds=expires_in.seconds)
+    print(f'\n      Active machine: {name}')
+    print(f'      Expires in {expires_in_rounded}')
+    get_machine(name)
 
 # get and return review data for a machine given its id
 # this is only used for one part of the output in print_machine()
@@ -136,6 +156,8 @@ def print_machine(machine, group):
     # do starting point first bc it's different
     if group == 'starting_point':
         m_name = machine['name']
+        m_id = machine['id']
+        m_url = f'https://app.hackthebox.com/machines/{m_id}'
         m_difficulty = machine['difficultyText']
         m_os = machine['os']
         m_author = machine['maker']['name']
@@ -145,6 +167,7 @@ def print_machine(machine, group):
         m_user_owns = machine['user_owns_count']
         m_root_owns = machine['root_owns_count']
         print(f'\n      {m_name} - {m_difficulty} {m_os} - Starting Point - by {m_author}')
+        print(f'      {m_url}')
         print(f'      Released {m_date_str} ({m_days_ago} days ago)')
         print(f'      {m_user_owns} User Owns, {m_root_owns} Root Owns\n')
         return
@@ -158,6 +181,8 @@ def print_machine(machine, group):
 
     # get all the values from the machine dict
     m_name = machine['name']
+    m_id = machine['id']
+    m_url = f'https://app.hackthebox.com/machines/{m_id}'
     m_difficulty = machine['difficultyText']
     m_os = machine['os']
     m_author = machine['maker']['name']
@@ -176,10 +201,11 @@ def print_machine(machine, group):
 
     # print everything
     print(f'\n      {m_name} - {m_difficulty} {m_os} - {group.capitalize()} - by {m_author}')
+    print(f'      {m_url}')
     print(f'      Released {m_date_str} ({m_days_ago} days ago)')
     print(f'      User Difficulty Rating {m_difficulty_rating}/100')
     print(f'      {m_user_owns} User Owns, {m_root_owns} Root Owns')
-    print(f'\n      Rating - {m_stars}/5 Stars' + (f' - {m_review_count} Reviews' if show_reviews else ''))
+    print(f'\n      Rating - {m_stars}/5 Stars' + (f' - {m_review_count} Reviews' if show_reviews else ' - No Reviews'))
     print(f'         {int(float(m_stars) * 10) * "#"}{(50 - int(float(m_stars) * 10)) * "-"}')
     if show_reviews and m_has_author_review:
         print('      including a self review by the author (cringe)')
@@ -195,6 +221,8 @@ def print_machine(machine, group):
 def main():
     if args.m or args.r:
         get_machine(args.m if args.m else args.r)
+    elif args.a:
+        get_active()
     elif ENABLE_DEBUGGING and args.d:
         embed()
     else:
