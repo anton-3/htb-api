@@ -20,7 +20,7 @@ import json
 import time
 from datetime import datetime
 
-ENABLE_DEBUGGING = False
+ENABLE_DEBUGGING = True
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -31,6 +31,7 @@ HEADERS = {
         'Authorization': f'Bearer {TOKEN}',
         'User-Agent': 'bruh'
         }
+BASEURL = 'https://www.hackthebox.com/api/v4'
 
 # parse command line arguments
 parser = ArgumentParser(description='simple commands to call the HackTheBox v4 API')
@@ -66,21 +67,24 @@ difficulty = [
 # print_json(): print a python dict prettily to console
 # print_machine(): print a machine's data prettily to console
 
-# sends a request to an endpoint in HTB's API, passing proper headers for auth
+# sends a get request to an endpoint in HTB's API, passing proper headers for auth
 # return json response as python dict
-def get(url):
+def get(endpoint):
     if not TOKEN:
         print('no API token found in .env, you need one to make API requests')
         print('instructions here: https://github.com/anton-3/htb-api')
         sys.exit(1)
+    url = BASEURL + endpoint
     response = requests.get(url, headers=HEADERS).content.decode('utf-8')
     return json.loads(response)
 
-def post(url, data=None):
+# same but for post requests
+def post(endpoint, data=None):
     if not TOKEN:
         print('no API token found in .env, you need one to make API requests')
         print('instructions here: https://github.com/anton-3/htb-api')
         sys.exit(1)
+    url = BASEURL + endpoint
     if data:
         response = requests.post(url, headers=HEADERS, data=data)
     else:
@@ -89,19 +93,20 @@ def post(url, data=None):
     return json.loads(response)
 
 # function for -m
+# /machine/profile/name_or_id
 # get data about a machine and print it to console
 # name_or_id is either the name or id of the machine
 # we can get the data directly if it's a lab machine (active or retired)
 # if it's a starting point machine, we need to make a second request
 def get_machine(name_or_id):
-    response = get('https://www.hackthebox.com/api/v4/machine/profile/' + name_or_id)
+    response = get('/machine/profile/' + name_or_id)
     # if the request found a matching machine (either in active or retired)
     if 'info' in response:
         machine = response['info']
         group = 'retired' if machine['retired'] == 1 else 'active'
         print_machine(machine, group)
     elif response['message'] == 'Starting Point Machine':
-        sp_machines = get('https://www.hackthebox.com/api/v4/sp/machines')['info']
+        sp_machines = get('/sp/machines')['info']
         # if this next() stuff throws a StopIteration then the API data is inaccurate (idc enough to handle that)
         machine = next(machine for machine in sp_machines if name_or_id.lower() == machine['name'].lower() or name_or_id == str(machine['id']))
         print_machine(machine, 'starting_point')
@@ -110,9 +115,8 @@ def get_machine(name_or_id):
 
 # get and return review data for a machine given its id
 # this is only used for one part of the output in print_machine()
-def get_reviews(id):
-    url = 'https://www.hackthebox.com/api/v4/machine/reviews/' + str(id)
-    review_data = get(url)['message']
+def get_reviews(machine_id):
+    review_data = get('/machine/reviews/' + str(machine_id))['message']
     return review_data
 
 # print json data (python dict) to the console prettily
