@@ -1,4 +1,4 @@
-# HackTheBox API Script 2.0
+2 HackTheBox API Script 1.1
 
 Simple python script to interact with [HackTheBox](https://www.hackthebox.com)'s [API](https://documenter.getpostman.com/view/13129365/TVeqbmeq)
 
