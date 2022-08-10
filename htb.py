@@ -20,7 +20,7 @@ import json
 import time
 from datetime import datetime
 
-ENABLE_DEBUGGING = True
+ENABLE_DEBUGGING = False
 if ENABLE_DEBUGGING:
     from IPython import embed
 
