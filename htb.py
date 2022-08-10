@@ -3,6 +3,7 @@
 # TODO
 # implement submitting flags (post to /machine/own with flag:flag, id: machine id, difficulty
 # https://github.com/D3vil0per/HackTheBox-API
+# RELEASE ARENA SUPPORT, make sure everything works for all machine groups
 # -S machine: spawn a specific machine
 # -K: kill the running machine
 # -R: reset the running machine
@@ -11,7 +12,7 @@
 # colored output?
 
 import requests
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from dotenv import load_dotenv
 import os
 import sys
@@ -33,11 +34,13 @@ HEADERS = {
 BASEURL = 'https://www.hackthebox.com/api/v4'
 
 # parse command line arguments
-parser = ArgumentParser(description='simple commands to call the HackTheBox v4 API')
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description='simple commands to call the HackTheBox v4 API\nall commands are mutually exclusive')
 group = parser.add_mutually_exclusive_group()
-group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name, ip, or id')
-group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
-group.add_argument('-a', action='store_true', help='print info about currently active machine')
+group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name or id')
+#group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
+group.add_argument('-a', action='store_true', help='print info about currently active (spawned) machine')
+group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
+group.add_argument('-K', action='store_true', help='kill currently active machine')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -64,6 +67,8 @@ difficulty = [
 # post(): send POST request to the API, return json
 # get_machine(): -m and -r, get data about a machine and print it to console
 # get_active(): -a, basically get_machine() but for currently active machine
+# spawn_machine(): -S, spawn a machine
+# kill_machine(): -K, kill currently spawned machine
 # get_reviews(): return review data about a machine
 # print_json(): print a python dict prettily to console
 # print_machine(): print a machine's data prettily to console
@@ -118,13 +123,14 @@ def get_machine(name_or_id):
 # /machine/active
 # gets currently active machine and prints its information
 def get_active():
-    response = get('/machine/active')['info']
-    if not response:
+    response = get('/machine/active')
+    info = response['info']
+    if not info:
         print('No currently active machine')
         return
-    name = response['name']
-    machine_id = response['id']
-    expire_date = response['expires_at']
+    name = info['name']
+    machine_id = info['id']
+    expire_date = info['expires_at']
     expire_date_obj = datetime.strptime(expire_date, '%Y-%m-%d %H:%M:%S')
     now = datetime.now()
     expires_in = expire_date_obj - now
@@ -132,6 +138,63 @@ def get_active():
     print(f'\n      Active machine: {name}')
     print(f'      Expires in {expires_in_rounded}')
     get_machine(name)
+
+# function for -S
+# /vm/spawn {'machine_id': 123}
+# spawns an instance of a machine given name or id
+def spawn_machine(name_or_id):
+    # we need the id to spawn the machine
+    if name_or_id.isnumeric():
+        # if name_or_id is an id, we can just use it in the spawn request
+        m_id = int(name_or_id)
+    else:
+        # if it's a name, we need to send a request and get the id
+        name = name_or_id
+        info_response = get('/machine/profile/' + name)
+        if 'info' in info_response:
+            m_id = info_response['info']['id']
+        else:
+            print('error: no such machine')
+            return
+
+    # try to spawn the machine from the ID
+    print(f'spawning machine ID {m_id}... (may take a while)')
+    data = {'machine_id': m_id}
+    spawn_response = post('/vm/spawn', data)
+    message = spawn_response['message']
+
+    # if it worked, tell the user the IP of the machine as well
+    # for some godforsaken reason the only way I know of to get a machine's IP
+    # is to query for literally every machine and select for the correct IP
+    if message == 'Machine deployed to lab.':
+        group = 'retired' if info_response['info']['retired'] == 1 else 'active'
+        endpoint = '/machine/list/retired' if group == 'retired' else '/machine/list'
+        list_response = get(endpoint)
+        info = list_response['info']
+        machine = next(machine for machine in info if m_id == machine['id'])
+        m_ip = machine['ip']
+        message += f'\n{m_ip}'
+
+    print(message)
+
+# function for -K
+# /vm/terminate {'machine_id': 123}
+# kills the currently spawned machine instance
+def kill_machine():
+    # get the currently active machine first
+    # since for some reason we need to pass the ID of the machine we're killing
+    active_response = get('/machine/active')
+    info = active_response['info']
+    if not info:
+        print('No currently active machine')
+        return
+    name = info['name']
+    m_id = info['id']
+    print(f'killing {name}...')
+    data = {'machine_id': m_id}
+    kill_response = post('/vm/terminate', data)
+    message = kill_response['message']
+    print(message)
 
 # get and return review data for a machine given its id
 # this is only used for one part of the output in print_machine()
@@ -148,16 +211,14 @@ def print_json(data):
 # need to know the group bc different groups return different data about their machines
 def print_machine(machine, group):
     # if -r, print as raw json
-    if args.r:
-        print_json(machine)
-        return
+#    if args.r:
+#        print_json(machine)
+#        return
     # otherwise it's -m, so print it human readable
 
     # do starting point first bc it's different
     if group == 'starting_point':
         m_name = machine['name']
-        m_id = machine['id']
-        m_url = f'https://app.hackthebox.com/machines/{m_id}'
         m_difficulty = machine['difficultyText']
         m_os = machine['os']
         m_author = machine['maker']['name']
@@ -167,7 +228,6 @@ def print_machine(machine, group):
         m_user_owns = machine['user_owns_count']
         m_root_owns = machine['root_owns_count']
         print(f'\n      {m_name} - {m_difficulty} {m_os} - Starting Point - by {m_author}')
-        print(f'      {m_url}')
         print(f'      Released {m_date_str} ({m_days_ago} days ago)')
         print(f'      {m_user_owns} User Owns, {m_root_owns} Root Owns\n')
         return
@@ -219,10 +279,14 @@ def print_machine(machine, group):
     print()
 
 def main():
-    if args.m or args.r:
+    if args.m:# or args.r:
         get_machine(args.m if args.m else args.r)
     elif args.a:
         get_active()
+    elif args.S:
+        spawn_machine(args.S)
+    elif args.K:
+        kill_machine()
     elif ENABLE_DEBUGGING and args.d:
         embed()
     else:
