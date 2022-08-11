@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
-# TODO
+# API reference (since nobody has all the endpoints in a single place ig)
+# https://documenter.getpostman.com/view/13129365/TVeqbmeq
 # https://github.com/D3vil0per/HackTheBox-API
+# https://pyhackthebox.readthedocs.io/en/latest/index.html
+# TODO
 # RELEASE ARENA SUPPORT, make sure everything works for all machine groups
 # cache active machine IP somewhere so each call to -a doesn't take a year?
 # -u user: user info, if no user is provided assume self
 # -r: get newest/upcoming release?
+# -w: get official writeup for a machine, assume active machine if no arg
 # some kind of machine display system to show machines sorted in an interactive interface
 # colored output?
 
@@ -18,7 +22,7 @@ import json
 import time
 from datetime import datetime, timedelta
 
-ENABLE_DEBUGGING = False
+ENABLE_DEBUGGING = True
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -34,12 +38,13 @@ BASEURL = 'https://www.hackthebox.com/api/v4'
 # parse command line arguments
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description='simple commands to call the HackTheBox v4 API\nall commands are mutually exclusive')
 group = parser.add_mutually_exclusive_group()
-group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name or id', nargs='?', const=True)
+group.add_argument('-m', type=str, metavar='machine', help='print info about a machine', nargs='?', const=True)
 group.add_argument('-a', action='store_true', help='show currently active (spawned) machine')
-group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
+group.add_argument('-w', type=str, metavar='machine', help='get official pdf writeup for a machine and save it to a file', nargs='?', const=True)
+group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
 group.add_argument('-R', action='store_true', help='request a reset for the currently active machine')
-group.add_argument('-F', type=str, metavar='flag', help='submit flag for the currently active machine - pass either flag text or a filename')
+group.add_argument('-F', type=str, metavar='flag', help='submit flag for the currently active machine - either flag text or a filename')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -84,8 +89,12 @@ def get(endpoint):
         print('instructions here: https://github.com/anton-3/htb-api')
         sys.exit(1)
     url = BASEURL + endpoint
-    response = requests.get(url, headers=HEADERS).content.decode('utf-8')
-    return json.loads(response)
+    response = requests.get(url, headers=HEADERS)
+    try:
+        return json.loads(response.content.decode('utf-8'))
+    # just return the regular response if it's not json
+    except UnicodeDecodeError:
+        return response
 
 # same but for post requests
 def post(endpoint, data=None):
@@ -98,8 +107,10 @@ def post(endpoint, data=None):
         response = requests.post(url, headers=HEADERS, data=data)
     else:
         response = requests.post(url, headers=HEADERS)
-    response = response.content.decode('utf-8')
-    return json.loads(response)
+    try:
+        return json.loads(response.content.decode('utf-8'))
+    except UnicodeDecodeError:
+        return response
 
 # function for -m
 # GET /machine/profile/name_or_id OR /sp/machines/name_or_id
@@ -114,7 +125,7 @@ def get_machine(name_or_id):
         active_response = get('/machine/active')
         info = active_response['info']
         if not info:
-            print('No currently active machine')
+            print('no currently active machine')
             return
         m_id = info['id']
         # /machine/active doesn't return very much info
@@ -143,24 +154,60 @@ def get_active():
     response = get('/machine/active')
     info = response['info']
     if not info:
-        print('No currently active machine')
+        print('no currently active machine')
         return
     name = info['name']
-    machine_id = info['id']
+    m_id = info['id']
     expire_date = info['expires_at']
     expire_date_obj = datetime.strptime(expire_date, '%Y-%m-%d %H:%M:%S')
     now = datetime.now()
     expires_in = expire_date_obj - now
     expires_in_rounded = timedelta(days=expires_in.days, seconds=expires_in.seconds)
-    print(f'\n      Active machine: {name}')
+    print(f'\n      Active machine: {name} ID {m_id}')
     print(f'      Expires in {expires_in_rounded}')
     print('      Getting IP: ')
     try:
         # this call takes literal years so consider removing it
         # putting it in a try except so you can ctrl C it without stack trace output
-        print(f'      {get_ip(machine_id)}')
+        print(f'      {get_ip(m_id)}')
     except:
         pass
+
+# function for -w
+# GET /machine/writeup/id
+# get official writeup for a machine
+# gets the currently active machine without an argument
+def get_writeup(name_or_id):
+    if name_or_id == True:
+        # if no argument passed, get the ID of active machine
+        active_response = get('/machine/active')
+        info = active_response['info']
+        if not info:
+            print('no currently active machine')
+            return
+        m_id = info['id']
+        name = info['name']
+    else:
+        # otherwise call /machine/profile to get both name and ID
+        # since we only have one of the two right now
+        profile_response = get('/machine/profile/' + name_or_id)
+        if 'info' in profile_response:
+            info = profile_response['info']
+            m_id = info['id']
+            name = info['name']
+        else:
+            print('error: no such machine')
+            return
+    # now we have the id for sure
+    print(f'requesting pdf writeup for {name}')
+    response = get(f'/machine/writeup/{m_id}')
+    if not response.status_code == 200:
+        print('error: no such machine')
+        return
+    filename = f'{name}-writeup.pdf'
+    print(f'writing pdf data to {filename}')
+    with open(filename, 'wb') as f:
+        f.write(response.content)
 
 # function for -S
 # POST /vm/spawn {'machine_id': 123}
@@ -203,7 +250,7 @@ def kill_machine():
     active_response = get('/machine/active')
     info = active_response['info']
     if not info:
-        print('No currently active machine')
+        print('no currently active machine')
         return
     name = info['name']
     m_id = info['id']
@@ -220,7 +267,7 @@ def reset_machine():
     active_response = get('/machine/active')
     info = active_response['info']
     if not info:
-        print('No currently active machine')
+        print('no currently active machine')
         return
     name = info['name']
     m_id = info['id']
@@ -242,7 +289,7 @@ def submit_flag(flag_arg):
     active_response = get('/machine/active')
     info = active_response['info']
     if not info:
-        print('No currently active machine')
+        print('no currently active machine')
         return
     name = info['name']
     m_id = info['id']
@@ -379,6 +426,8 @@ def main():
         get_machine(args.m)
     elif args.a:
         get_active()
+    elif args.w:
+        get_writeup(args.w)
     elif args.S:
         spawn_machine(args.S)
     elif args.K:
