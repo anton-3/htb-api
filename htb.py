@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
 # TODO
-# implement submitting flags (post to /machine/own with flag:flag, id: machine id, difficulty
 # https://github.com/D3vil0per/HackTheBox-API
 # RELEASE ARENA SUPPORT, make sure everything works for all machine groups
 # cache active machine IP somewhere so each call to -a doesn't take a year?
-# change -m to output info about spawned machine if no args are passed
 # -u user: user info, if no user is provided assume self
 # -r: get newest/upcoming release?
 # some kind of machine display system to show machines sorted in an interactive interface
@@ -36,7 +34,7 @@ BASEURL = 'https://www.hackthebox.com/api/v4'
 # parse command line arguments
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description='simple commands to call the HackTheBox v4 API\nall commands are mutually exclusive')
 group = parser.add_mutually_exclusive_group()
-group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name or id')
+group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name or id', nargs='?', const=True)
 group.add_argument('-a', action='store_true', help='show currently active (spawned) machine')
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
@@ -110,7 +108,21 @@ def post(endpoint, data=None):
 # we can get the data directly if it's a lab machine (active or retired)
 # if it's a starting point machine, we need to make a second request
 def get_machine(name_or_id):
-    response = get('/machine/profile/' + name_or_id)
+    # if -m is passed without args, it's set to True by argparser
+    # we want it to retrieve the currently spawned machine in that case
+    if name_or_id == True:
+        active_response = get('/machine/active')
+        info = active_response['info']
+        if not info:
+            print('No currently active machine')
+            return
+        m_id = info['id']
+        # /machine/active doesn't return very much info
+        # so we need to request /machine/profile with its newly acquired id
+        response = get(f'/machine/profile/{m_id}')
+    else:
+        # otherwise just make the same request with the arg
+        response = get('/machine/profile/' + name_or_id)
     # if the request found a matching machine (either in active or retired)
     if 'info' in response:
         machine = response['info']
