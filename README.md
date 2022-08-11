@@ -1,9 +1,9 @@
-# HackTheBox API Script 1.2
+# HackTheBox API Script 1.3
 
 Simple python script to interact with [HackTheBox](https://www.hackthebox.com)'s [API](https://documenter.getpostman.com/view/13129365/TVeqbmeq)
 
 ```
-usage: htb.py [-h] [-m machine | -a | -S machine | -K | -R]
+usage: htb.py [-h] [-m machine | -a | -S machine | -K | -R | -F flag]
 
 simple commands to call the HackTheBox v4 API
 all commands are mutually exclusive
@@ -11,10 +11,11 @@ all commands are mutually exclusive
 options:
   -h, --help  show this help message and exit
   -m machine  print info about a machine - pass its name or id
-  -a          print info about currently active (spawned) machine
+  -a          show currently active (spawned) machine
   -S machine  spawn an instance of a machine - pass its name or id
   -K          kill the currently active machine
   -R          request a reset for the currently active machine
+  -F flag     submit flag for the currently active machine - pass either flag text or a filename
 ```
 
 ## Usage
@@ -69,10 +70,12 @@ $ ./htb.py -m lame
 - Spawn a machine
 - Kill a spawned machine
 - Reset a spawned machine
+- Submit flags
 
 ## Upcoming Features
 
-- Submit a flag for a spawned machine
+- Get info about a specific user (or yourself)
+- Print a list of machines based on criteria
 
 ## I'm unoriginal
 
