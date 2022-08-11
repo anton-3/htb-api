@@ -40,7 +40,8 @@ group.add_argument('-m', type=str, metavar='machine', help='print info about a m
 #group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
 group.add_argument('-a', action='store_true', help='print info about currently active (spawned) machine')
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
-group.add_argument('-K', action='store_true', help='kill currently active machine')
+group.add_argument('-K', action='store_true', help='kill the currently active machine')
+group.add_argument('-R', action='store_true', help='request a reset for the currently active machine')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -99,7 +100,7 @@ def post(endpoint, data=None):
     return json.loads(response)
 
 # function for -m
-# /machine/profile/name_or_id OR /sp/machines/name_or_id
+# GET /machine/profile/name_or_id OR /sp/machines/name_or_id
 # get data about a machine and print it to console
 # name_or_id is either the name or id of the machine
 # we can get the data directly if it's a lab machine (active or retired)
@@ -120,7 +121,7 @@ def get_machine(name_or_id):
         print('error: no such machine')
 
 # function for -a
-# /machine/active
+# GET /machine/active
 # gets currently active machine and prints its information
 def get_active():
     response = get('/machine/active')
@@ -140,7 +141,7 @@ def get_active():
     get_machine(name)
 
 # function for -S
-# /vm/spawn {'machine_id': 123}
+# POST /vm/spawn {'machine_id': 123}
 # spawns an instance of a machine given name or id
 def spawn_machine(name_or_id):
     # we need the id to spawn the machine
@@ -178,7 +179,7 @@ def spawn_machine(name_or_id):
     print(message)
 
 # function for -K
-# /vm/terminate {'machine_id': 123}
+# POST /vm/terminate {'machine_id': 123}
 # kills the currently spawned machine instance
 def kill_machine():
     # get the currently active machine first
@@ -194,6 +195,23 @@ def kill_machine():
     data = {'machine_id': m_id}
     kill_response = post('/vm/terminate', data)
     message = kill_response['message']
+    print(message)
+
+# function for -R
+# POST /vm/reset {'machine_id': 123}
+# requests a reset for the current active machine instance
+def reset_machine():
+    active_response = get('/machine/active')
+    info = active_response['info']
+    if not info:
+        print('No currently active machine')
+        return
+    name = info['name']
+    m_id = info['id']
+    print(f'requesting reset for {name}...')
+    data = {'machine_id': m_id}
+    reset_response = post('/vm/reset', data)
+    message = reset_response['message']
     print(message)
 
 # get and return review data for a machine given its id
@@ -287,6 +305,8 @@ def main():
         spawn_machine(args.S)
     elif args.K:
         kill_machine()
+    elif args.R:
+        reset_machine()
     elif ENABLE_DEBUGGING and args.d:
         embed()
     else:
