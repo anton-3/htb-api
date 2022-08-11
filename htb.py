@@ -4,11 +4,11 @@
 # implement submitting flags (post to /machine/own with flag:flag, id: machine id, difficulty
 # https://github.com/D3vil0per/HackTheBox-API
 # RELEASE ARENA SUPPORT, make sure everything works for all machine groups
-# -S machine: spawn a specific machine
-# -K: kill the running machine
-# -R: reset the running machine
-#    post('/vm/reset', {'machine_id':444})
+# cache active machine IP somewhere so each call to -a doesn't take a year?
+# flag read from .txt file
+# change -m to output info about spawned machine if no args are passed
 # -u user: user info, if no user is provided assume self
+# -r: get newest/upcoming release?
 # colored output?
 
 import requests
@@ -37,17 +37,17 @@ BASEURL = 'https://www.hackthebox.com/api/v4'
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description='simple commands to call the HackTheBox v4 API\nall commands are mutually exclusive')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-m', type=str, metavar='machine', help='print info about a machine - pass its name or id')
-#group.add_argument('-r', type=str, metavar='machine', help='same as -m but print as raw json')
-group.add_argument('-a', action='store_true', help='print info about currently active (spawned) machine')
+group.add_argument('-a', action='store_true', help='show currently active (spawned) machine')
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
 group.add_argument('-R', action='store_true', help='request a reset for the currently active machine')
+group.add_argument('-F', type=str, metavar='flag', help='submit flag for the currently active machine')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
 args = parser.parse_args()
 
-# translating difficulty strings to a number out of 10 for later
+# putting difficulty strings in order to interpret responses later
 difficulty = [
         "counterCake",
         "counterVeryEasy",
@@ -66,10 +66,14 @@ difficulty = [
 # listing all functions right here for sanity's sake
 # get(): send GET request to the API, return json
 # post(): send POST request to the API, return json
-# get_machine(): -m and -r, get data about a machine and print it to console
+# get_machine(): -m, get data about a machine and print it to console
 # get_active(): -a, basically get_machine() but for currently active machine
 # spawn_machine(): -S, spawn a machine
 # kill_machine(): -K, kill currently spawned machine
+# reset_machine(): -R, reset currently spawned machine
+# submit_flag(): -F, submit flag for currently spawned machine
+# get_difficulty(): get user difficulty rating for submit_flag()
+# get_ip(): get IP of a machine
 # get_reviews(): return review data about a machine
 # print_json(): print a python dict prettily to console
 # print_machine(): print a machine's data prettily to console
@@ -138,7 +142,13 @@ def get_active():
     expires_in_rounded = timedelta(days=expires_in.days, seconds=expires_in.seconds)
     print(f'\n      Active machine: {name}')
     print(f'      Expires in {expires_in_rounded}')
-    get_machine(name)
+    print('      Getting IP: ')
+    try:
+        # this call takes literal years so consider removing it
+        # putting it in a try except so you can ctrl C it without stack trace output
+        print(f'      {get_ip(machine_id)}')
+    except:
+        pass
 
 # function for -S
 # POST /vm/spawn {'machine_id': 123}
@@ -165,16 +175,10 @@ def spawn_machine(name_or_id):
     message = spawn_response['message']
 
     # if it worked, tell the user the IP of the machine as well
-    # for some godforsaken reason the only way I know of to get a machine's IP
-    # is to query for literally every machine and select for the correct IP
     if message == 'Machine deployed to lab.':
-        group = 'retired' if info_response['info']['retired'] == 1 else 'active'
-        endpoint = '/machine/list/retired' if group == 'retired' else '/machine/list'
-        list_response = get(endpoint)
-        info = list_response['info']
-        machine = next(machine for machine in info if m_id == machine['id'])
-        m_ip = machine['ip']
-        message += f'\n{m_ip}'
+        m_ip = get_ip(m_id)
+        m_url = f'https://app.hackthebox.com/machines/{m_id}'
+        message += f'\n{m_url}\n{m_ip}'
 
     print(message)
 
@@ -214,6 +218,60 @@ def reset_machine():
     message = reset_response['message']
     print(message)
 
+# function for -F
+# POST /machine/own {'flag': flag, 'id': 123, 'difficulty': 5}
+# submits a flag for the currently active machine
+# prompts for difficulty rating, user must input an integer between 1 and 10 inclusive
+def submit_flag(flag):
+    # first, make sure a machine is spawned, if so get its ID
+    # i'm violating DRY here I know
+    active_response = get('/machine/active')
+    info = active_response['info']
+    if not info:
+        print('No currently active machine')
+        return
+    name = info['name']
+    m_id = info['id']
+    # get the difficulty rating from the user
+    difficulty = get_difficulty()
+    print(f'submitting flag {flag} with difficulty {difficulty}/10 for machine {name}')
+    data = {}
+    data['flag'] = flag
+    data['id'] = m_id
+    data['difficulty'] = difficulty * 10 # the actual endpoint expects 10-100
+    submit_response = post('/machine/own', data)
+    message = submit_response['message']
+    status = submit_response['status']
+    print(f'{status} {message}')
+
+# gets a difficulty rating from the user for submit_flag
+# must be an integer between 1 and 10 inclusive
+def get_difficulty():
+    while True:
+        difficulty = input('rate the difficulty 1-10: ')
+        if difficulty.isnumeric() and int(difficulty) in range(1,11):
+            return int(difficulty)
+        print('error: invalid input, must be an integer between 1 to 10 inclusive')
+
+# gets IP of machine given its name or ID
+# in general should avoid this as it takes several seconds to run
+# for some godforsaken reason the only way I know of to get a machine's IP
+# is to query for literally every machine and select for the correct IP
+# only works for lab machines (either active or retired)
+def get_ip(name_or_id):
+    # first make a request to /machine/profile/{name_or_id} to get the group that it's in
+    info_response = get(f'/machine/profile/{name_or_id}')
+    if not 'info' in info_response:
+        print('get_ip() error, this shouldn\'t have happened')
+        return
+    info = info_response['info']
+    m_id = info['id']
+    endpoint = '/machine/list/retired' if info['retired'] == 1 else '/machine/list'
+    list_response = get(endpoint)
+    list_info = list_response['info']
+    machine = next(machine for machine in list_info if m_id == machine['id'])
+    return machine['ip']
+
 # get and return review data for a machine given its id
 # this is only used for one part of the output in print_machine()
 def get_reviews(machine_id):
@@ -228,12 +286,6 @@ def print_json(data):
 # group is 'active', 'retired', or 'starting_point'
 # need to know the group bc different groups return different data about their machines
 def print_machine(machine, group):
-    # if -r, print as raw json
-#    if args.r:
-#        print_json(machine)
-#        return
-    # otherwise it's -m, so print it human readable
-
     # do starting point first bc it's different
     if group == 'starting_point':
         m_name = machine['name']
@@ -297,8 +349,8 @@ def print_machine(machine, group):
     print()
 
 def main():
-    if args.m:# or args.r:
-        get_machine(args.m if args.m else args.r)
+    if args.m:
+        get_machine(args.m)
     elif args.a:
         get_active()
     elif args.S:
@@ -307,6 +359,8 @@ def main():
         kill_machine()
     elif args.R:
         reset_machine()
+    elif args.F:
+        submit_flag(args.F)
     elif ENABLE_DEBUGGING and args.d:
         embed()
     else:
