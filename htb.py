@@ -5,10 +5,10 @@
 # https://github.com/D3vil0per/HackTheBox-API
 # RELEASE ARENA SUPPORT, make sure everything works for all machine groups
 # cache active machine IP somewhere so each call to -a doesn't take a year?
-# flag read from .txt file
 # change -m to output info about spawned machine if no args are passed
 # -u user: user info, if no user is provided assume self
 # -r: get newest/upcoming release?
+# some kind of machine display system to show machines sorted in an interactive interface
 # colored output?
 
 import requests
@@ -41,7 +41,7 @@ group.add_argument('-a', action='store_true', help='show currently active (spawn
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine - pass its name or id')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
 group.add_argument('-R', action='store_true', help='request a reset for the currently active machine')
-group.add_argument('-F', type=str, metavar='flag', help='submit flag for the currently active machine')
+group.add_argument('-F', type=str, metavar='flag', help='submit flag for the currently active machine - pass either flag text or a filename')
 if ENABLE_DEBUGGING:
     group.add_argument('-d', action='store_true', help='debug mode')
 
@@ -222,7 +222,9 @@ def reset_machine():
 # POST /machine/own {'flag': flag, 'id': 123, 'difficulty': 5}
 # submits a flag for the currently active machine
 # prompts for difficulty rating, user must input an integer between 1 and 10 inclusive
-def submit_flag(flag):
+# flag_arg is either the flag text itself e.g. "e0d0a3d75aae2526566b0892d28de23c"
+# or a path to a flag file like user.txt or root.txt
+def submit_flag(flag_arg):
     # first, make sure a machine is spawned, if so get its ID
     # i'm violating DRY here I know
     active_response = get('/machine/active')
@@ -232,6 +234,18 @@ def submit_flag(flag):
         return
     name = info['name']
     m_id = info['id']
+    flag_chars = '0123456789abcdef'
+    if all(char in flag_chars for char in flag_arg):
+        # if flag_args is exclusively in hex characters, treat it as the flag itself
+        flag = flag_arg
+    else:
+        # otherwise read from that file
+        try:
+            with open(flag_arg, 'r') as f:
+                flag = f.read().strip() # strip the newline at the end
+        except FileNotFoundError:
+            print('error: invalid flag format or couldn\'t read flag file')
+            return
     # get the difficulty rating from the user
     difficulty = get_difficulty()
     print(f'submitting flag {flag} with difficulty {difficulty}/10 for machine {name}')
