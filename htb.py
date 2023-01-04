@@ -75,7 +75,7 @@ difficulty = [
 # kill_machine(): -K, kill currently spawned machine
 # reset_machine(): -R, reset currently spawned machine
 # submit_flag(): -F, submit flag for currently spawned machine
-# add_todo(): -T, add or remove a machine from your to-do list
+# update_todo(): -T, add or remove a machine from your to-do list
 # get_difficulty(): get user difficulty rating for submit_flag()
 # get_ip(): get IP of a machine
 # get_reviews(): return review data about a machine
@@ -321,7 +321,7 @@ def submit_flag(flag_arg):
 # function for -T
 # POST /machine/todo/update/id
 # adds or removes a machine from your to-do list
-def add_todo(name_or_id):
+def update_todo(name_or_id):
     # we need the id to spawn the machine
     if name_or_id.isnumeric():
         # if name_or_id is an id, we can just use it in the spawn request
@@ -337,16 +337,25 @@ def add_todo(name_or_id):
             return
 
     print(f'updating to-do for machine ID {m_id}...')
+    # get the todo list before updating so we can check if the machine got added or removed
+    before_todo = get('/machine/todo')
     todo_response = post(f'/machine/todo/update/{m_id}')
 
     # if it found the machine
     if 'info' in todo_response:
-        # if it returns any info, the machine got added to to-do
-        if len(todo_response['info']) == 1:
+        # todo_response['info'] is the to-do list after the update
+        old_todo_size = len(before_todo['info'])
+        new_todo_size = len(todo_response['info'])
+
+        # if new list is bigger than old list, it got added
+        if new_todo_size > old_todo_size:
             print('added machine to to-do list')
-        # otherwise, the machine got removed from the to-do list
-        else:
+        # if vice versa, it got removed
+        elif new_todo_size < old_todo_size:
             print('removed machine from to-do list')
+        # this should never happen but I'll handle it anyway
+        else:
+            print('something happened, idk what')
 
     # if it didn't find the machine
     else:
@@ -464,7 +473,7 @@ def main():
     elif args.w:
         get_writeup(args.w)
     elif args.T:
-        add_todo(args.T)
+        update_todo(args.T)
     elif args.S:
         spawn_machine(args.S)
     elif args.K:
