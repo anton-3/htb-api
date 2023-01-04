@@ -5,11 +5,9 @@
 # https://github.com/D3vil0per/HackTheBox-API
 # https://pyhackthebox.readthedocs.io/en/latest/index.html
 # TODO
-# RELEASE ARENA SUPPORT, make sure everything works for all machine groups
 # cache active machine IP somewhere so each call to -a doesn't take a year?
 # -u user: user info, if no user is provided assume self
 # -r: get newest/upcoming release?
-# -w: get official writeup for a machine, assume active machine if no arg
 # some kind of machine display system to show machines sorted in an interactive interface
 # colored output?
 
@@ -22,7 +20,7 @@ import json
 import time
 from datetime import datetime, timedelta
 
-ENABLE_DEBUGGING = True
+ENABLE_DEBUGGING = False
 if ENABLE_DEBUGGING:
     from IPython import embed
 
@@ -38,9 +36,10 @@ BASEURL = 'https://www.hackthebox.com/api/v4'
 # parse command line arguments
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description='simple commands to call the HackTheBox v4 API\nall commands are mutually exclusive')
 group = parser.add_mutually_exclusive_group()
-group.add_argument('-m', type=str, metavar='machine', help='print info about a machine', nargs='?', const=True)
+group.add_argument('-m', type=str, metavar='machine', help='print info about a machine (default: active)', nargs='?', const=True)
 group.add_argument('-a', action='store_true', help='show currently active (spawned) machine')
-group.add_argument('-w', type=str, metavar='machine', help='get official pdf writeup for a machine and save it to a file', nargs='?', const=True)
+group.add_argument('-w', type=str, metavar='machine', help='get official pdf writeup for a machine (default: active) and save it to a file', nargs='?', const=True)
+group.add_argument('-T', type=str, metavar='machine', help='add or remove a machine from your to-do list')
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
 group.add_argument('-R', action='store_true', help='request a reset for the currently active machine')
@@ -71,10 +70,12 @@ difficulty = [
 # post(): send POST request to the API, return json
 # get_machine(): -m, get data about a machine and print it to console
 # get_active(): -a, basically get_machine() but for currently active machine
+# get_writeup(): -w, get official writeup for a machine
 # spawn_machine(): -S, spawn a machine
 # kill_machine(): -K, kill currently spawned machine
 # reset_machine(): -R, reset currently spawned machine
 # submit_flag(): -F, submit flag for currently spawned machine
+# add_todo(): -T, add or remove a machine from your to-do list
 # get_difficulty(): get user difficulty rating for submit_flag()
 # get_ip(): get IP of a machine
 # get_reviews(): return review data about a machine
@@ -109,7 +110,7 @@ def post(endpoint, data=None):
         response = requests.post(url, headers=HEADERS)
     try:
         return json.loads(response.content.decode('utf-8'))
-    except UnicodeDecodeError:
+    except (UnicodeDecodeError, json.decoder.JSONDecodeError):
         return response
 
 # function for -m
@@ -317,6 +318,40 @@ def submit_flag(flag_arg):
     status = submit_response['status']
     print(f'{status} {message}')
 
+# function for -T
+# POST /machine/todo/update/id
+# adds or removes a machine from your to-do list
+def add_todo(name_or_id):
+    # we need the id to spawn the machine
+    if name_or_id.isnumeric():
+        # if name_or_id is an id, we can just use it in the spawn request
+        m_id = int(name_or_id)
+    else:
+        # if it's a name, we need to send a request and get the id
+        name = name_or_id
+        info_response = get('/machine/profile/' + name)
+        if 'info' in info_response:
+            m_id = info_response['info']['id']
+        else:
+            print('error: no such machine')
+            return
+
+    print(f'updating to-do for machine ID {m_id}...')
+    todo_response = post(f'/machine/todo/update/{m_id}')
+
+    # if it found the machine
+    if 'info' in todo_response:
+        # if it returns any info, the machine got added to to-do
+        if len(todo_response['info']) == 1:
+            print('added machine to to-do list')
+        # otherwise, the machine got removed from the to-do list
+        else:
+            print('removed machine from to-do list')
+
+    # if it didn't find the machine
+    else:
+        print('error: no such machine')
+
 # gets a difficulty rating from the user for submit_flag
 # must be an integer between 1 and 10 inclusive
 def get_difficulty():
@@ -428,6 +463,8 @@ def main():
         get_active()
     elif args.w:
         get_writeup(args.w)
+    elif args.T:
+        add_todo(args.T)
     elif args.S:
         spawn_machine(args.S)
     elif args.K:
