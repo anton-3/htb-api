@@ -6,8 +6,8 @@
 # https://pyhackthebox.readthedocs.io/en/latest/index.html
 # TODO
 # cache active machine IP somewhere so each call to -a doesn't take a year?
+# -X: submit review https://github.com/D3vil0p3r/HackTheBox-API#submit-a-machine-review
 # -u user: user info, if no user is provided assume self
-# -r: get newest/upcoming release?
 # some kind of machine display system to show machines sorted in an interactive interface
 # colored output?
 
@@ -39,6 +39,7 @@ group = parser.add_mutually_exclusive_group()
 group.add_argument('-m', type=str, metavar='machine', help='print info about a machine (default: active)', nargs='?', const=True)
 group.add_argument('-a', action='store_true', help='show currently active (spawned) machine')
 group.add_argument('-w', type=str, metavar='machine', help='get official pdf writeup for a machine (default: active) and save it to a file', nargs='?', const=True)
+group.add_argument('-t', action='store_true', help='print current to-do list')
 group.add_argument('-T', type=str, metavar='machine', help='add or remove a machine from your to-do list')
 group.add_argument('-S', type=str, metavar='machine', help='spawn an instance of a machine')
 group.add_argument('-K', action='store_true', help='kill the currently active machine')
@@ -71,11 +72,12 @@ difficulty = [
 # get_machine(): -m, get data about a machine and print it to console
 # get_active(): -a, basically get_machine() but for currently active machine
 # get_writeup(): -w, get official writeup for a machine
+# get_todo(): -t, get current to-do list
+# update_todo(): -T, add or remove a machine from your to-do list
 # spawn_machine(): -S, spawn a machine
 # kill_machine(): -K, kill currently spawned machine
 # reset_machine(): -R, reset currently spawned machine
 # submit_flag(): -F, submit flag for currently spawned machine
-# update_todo(): -T, add or remove a machine from your to-do list
 # get_difficulty(): get user difficulty rating for submit_flag()
 # get_ip(): get IP of a machine
 # get_reviews(): return review data about a machine
@@ -94,7 +96,7 @@ def get(endpoint):
     try:
         return json.loads(response.content.decode('utf-8'))
     # just return the regular response if it's not json
-    except UnicodeDecodeError:
+    except (UnicodeDecodeError, json.decoder.JSONDecodeError):
         return response
 
 # same but for post requests
@@ -210,6 +212,70 @@ def get_writeup(name_or_id):
     with open(filename, 'wb') as f:
         f.write(response.content)
 
+# function for -t
+# GET /machine/todo
+# gets machines in your to-do list and prints them to the console
+def get_todo():
+    response = get('/machine/todo')
+    info = response['info']
+    print('https://app.hackthebox.com/machines/list/todo')
+    if not info:
+        print('no to-do machines found')
+        return
+
+    for machine in info:
+        m_name = machine['name']
+        m_difficulty = machine['difficultyText']
+        m_difficulty_rating = machine['difficulty']
+        m_os = machine['os']
+        m_date_obj = datetime.strptime(machine['release'].split('T')[0], '%Y-%m-%d')
+        m_days_ago = (datetime.now() - m_date_obj).days
+        m_stars = machine['stars']
+        print(f'{m_name} - {m_difficulty} {m_os} - Diff Rating {m_difficulty_rating}/100 - {m_stars}/5 Stars - {m_days_ago} Days Old')
+
+# function for -T
+# POST /machine/todo/update/id
+# adds or removes a machine from your to-do list
+def update_todo(name_or_id):
+    # we need the id to spawn the machine
+    if name_or_id.isnumeric():
+        # if name_or_id is an id, we can just use it in the spawn request
+        m_id = int(name_or_id)
+    else:
+        # if it's a name, we need to send a request and get the id
+        name = name_or_id
+        info_response = get('/machine/profile/' + name)
+        if 'info' in info_response:
+            m_id = info_response['info']['id']
+        else:
+            print('error: no such machine')
+            return
+
+    print(f'updating to-do for machine ID {m_id}...')
+    # get the todo list before updating so we can check if the machine got added or removed
+    before_todo = get('/machine/todo')
+    todo_response = post(f'/machine/todo/update/{m_id}')
+
+    # if it found the machine
+    if 'info' in todo_response:
+        # todo_response['info'] is the to-do list after the update
+        old_todo_size = len(before_todo['info'])
+        new_todo_size = len(todo_response['info'])
+
+        # if new list is bigger than old list, it got added
+        if new_todo_size > old_todo_size:
+            print('added machine to to-do list')
+        # if vice versa, it got removed
+        elif new_todo_size < old_todo_size:
+            print('removed machine from to-do list')
+        # this should never happen but I'll handle it anyway
+        else:
+            print('something happened, idk what')
+
+    # if it didn't find the machine
+    else:
+        print('error: no such machine')
+
 # function for -S
 # POST /vm/spawn {'machine_id': 123}
 # spawns an instance of a machine given name or id
@@ -317,49 +383,6 @@ def submit_flag(flag_arg):
     message = submit_response['message']
     status = submit_response['status']
     print(f'{status} {message}')
-
-# function for -T
-# POST /machine/todo/update/id
-# adds or removes a machine from your to-do list
-def update_todo(name_or_id):
-    # we need the id to spawn the machine
-    if name_or_id.isnumeric():
-        # if name_or_id is an id, we can just use it in the spawn request
-        m_id = int(name_or_id)
-    else:
-        # if it's a name, we need to send a request and get the id
-        name = name_or_id
-        info_response = get('/machine/profile/' + name)
-        if 'info' in info_response:
-            m_id = info_response['info']['id']
-        else:
-            print('error: no such machine')
-            return
-
-    print(f'updating to-do for machine ID {m_id}...')
-    # get the todo list before updating so we can check if the machine got added or removed
-    before_todo = get('/machine/todo')
-    todo_response = post(f'/machine/todo/update/{m_id}')
-
-    # if it found the machine
-    if 'info' in todo_response:
-        # todo_response['info'] is the to-do list after the update
-        old_todo_size = len(before_todo['info'])
-        new_todo_size = len(todo_response['info'])
-
-        # if new list is bigger than old list, it got added
-        if new_todo_size > old_todo_size:
-            print('added machine to to-do list')
-        # if vice versa, it got removed
-        elif new_todo_size < old_todo_size:
-            print('removed machine from to-do list')
-        # this should never happen but I'll handle it anyway
-        else:
-            print('something happened, idk what')
-
-    # if it didn't find the machine
-    else:
-        print('error: no such machine')
 
 # gets a difficulty rating from the user for submit_flag
 # must be an integer between 1 and 10 inclusive
@@ -472,6 +495,8 @@ def main():
         get_active()
     elif args.w:
         get_writeup(args.w)
+    elif args.t:
+        get_todo()
     elif args.T:
         update_todo(args.T)
     elif args.S:

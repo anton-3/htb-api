@@ -3,19 +3,22 @@
 Simple python script to interact with [HackTheBox](https://www.hackthebox.com)'s [API](https://documenter.getpostman.com/view/13129365/TVeqbmeq)
 
 ```
-usage: htb.py [-h] [-m machine | -a | -S machine | -K | -R | -F flag]
+usage: htb.py [-h] [-m [machine] | -a | -w [machine] | -t | -T machine | -S machine | -K | -R | -F flag]
 
 simple commands to call the HackTheBox v4 API
 all commands are mutually exclusive
 
 options:
-  -h, --help  show this help message and exit
-  -m machine  print info about a machine - pass its name or id
-  -a          show currently active (spawned) machine
-  -S machine  spawn an instance of a machine - pass its name or id
-  -K          kill the currently active machine
-  -R          request a reset for the currently active machine
-  -F flag     submit flag for the currently active machine - pass either flag text or a filename
+  -h, --help    show this help message and exit
+  -m [machine]  print info about a machine (default: active)
+  -a            show currently active (spawned) machine
+  -w [machine]  get official pdf writeup for a machine (default: active) and save it to a file
+  -t            print current to-do list
+  -T machine    add or remove a machine from your to-do list
+  -S machine    spawn an instance of a machine
+  -K            kill the currently active machine
+  -R            request a reset for the currently active machine
+  -F flag       submit flag for the currently active machine - either flag text or a filename
 ```
 
 ## Usage
@@ -71,15 +74,17 @@ $ ./htb.py -m lame
 - Kill a spawned machine
 - Reset a spawned machine
 - Submit flags
+- Read from and update your HackTheBox machine to-do list
 
 ## Upcoming Features
 
+- Submit a machine review
 - Get info about a specific user (or yourself)
 - Print a list of machines based on criteria
 
 ## I'm unoriginal
 
-Here's a few other people who are doing the same thing but better:
+Here's a few other people who've done the same thing but better:
 - [thomaslaurenson](https://github.com/thomaslaurenson/htb-api)
 - [qtc-de](https://github.com/qtc-de/htb-api)
 - [clubby789](https://github.com/clubby789/htb-api)
